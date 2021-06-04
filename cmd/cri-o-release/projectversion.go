@@ -67,7 +67,7 @@ func (p *projectVersion) minorUpgrade() bool {
 
 func (p *projectVersion) validate() error {
 	// running ls on the root will list all packages
-	projects, err := oscLs("/")
+	projects, err := oscLs("/", prefix)
 	if err != nil {
 		return err
 	}
@@ -105,13 +105,36 @@ func (p *projectVersion) CreateProject() error {
 	}
 	logrus.Debugf("osc meta prjconf output: %s", output.OutputTrimNL())
 
+	pkgs, err := oscLs(p.oldProject, "")
+	if err != nil {
+		return err
+	}
+
+	for _, pkg := range pkgs {
+		// don't branch the cri-o package, as that shouldn't be a branch
+		// or else edits to the old version will edit the new
+		if pkg == packageName {
+			continue
+		}
+		output, err := command.New(
+			oscCmd, "branch", p.oldProject, pkg, p.newProject,
+		).RunSilentSuccessOutput()
+		if err != nil {
+			return err
+		}
+
+		logrus.Debugf("osc branch output: %s", output.OutputTrimNL())
+	}
+
 	return nil
 }
 
-func oscLs(target string) ([]string, error) {
-	output, err := command.New(oscCmd, "ls", target).Pipe(
-		"grep", prefix,
-	).RunSilentSuccessOutput()
+func oscLs(target string, grepTarget string) ([]string, error) {
+	cmd := command.New(oscCmd, "ls", target)
+	if grepTarget != "" {
+		cmd = cmd.Pipe("grep", grepTarget)
+	}
+	output, err := cmd.RunSilentSuccessOutput()
 	if err != nil {
 		return nil, err
 	}
