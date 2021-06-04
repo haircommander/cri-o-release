@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -49,28 +48,9 @@ func run() error {
 		return errors.Wrapf(err, "parse targetVersionStr")
 	}
 
-	projects, err := findCrioProjects()
-	if err != nil {
-		return err
-	}
-
-	if err := pv.Validate(projects); err != nil {
-		return err
-	}
-
 	if err := pv.CreateProject(); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func findCrioProjects() ([]string, error) {
-	output, err := command.New(oscCmd, "ls", "/").Pipe(
-		"grep", prefix,
-	).RunSilentSuccessOutput()
-	if err != nil {
-		return nil, err
-	}
-	return strings.Split(output.OutputTrimNL(), "\n"), nil
 }

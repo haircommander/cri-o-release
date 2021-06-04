@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/blang/semver"
 	"github.com/pkg/errors"
@@ -41,6 +42,11 @@ func New(versionString string) (*projectVersion, error) {
 		version: &v,
 	}
 	pv.setProjectVersions()
+
+	if err := pv.validate(); err != nil {
+		return nil, err
+	}
+
 	return pv, nil
 }
 
@@ -59,7 +65,13 @@ func (p *projectVersion) minorUpgrade() bool {
 	return p.version.Patch == 0
 }
 
-func (p *projectVersion) Validate(projects []string) error {
+func (p *projectVersion) validate() error {
+	// running ls on the root will list all packages
+	projects, err := oscLs("/")
+	if err != nil {
+		return err
+	}
+
 	for _, project := range projects {
 		if project == p.oldProject {
 			return nil
@@ -94,4 +106,14 @@ func (p *projectVersion) CreateProject() error {
 	logrus.Debugf("osc meta prjconf output: %s", output.OutputTrimNL())
 
 	return nil
+}
+
+func oscLs(target string) ([]string, error) {
+	output, err := command.New(oscCmd, "ls", target).Pipe(
+		"grep", prefix,
+	).RunSilentSuccessOutput()
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(output.OutputTrimNL(), "\n"), nil
 }
