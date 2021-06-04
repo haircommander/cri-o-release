@@ -18,20 +18,12 @@ const (
 var (
 	targetVersionStr string
 	dryRun           bool
-	metaFile         string
-	prjconfFile      string
 )
 
 func main() {
 	// Parse CLI flags.
 	flag.StringVar(&targetVersionStr,
 		"target-version", "", "The version to be upgraded to",
-	)
-	flag.StringVar(&metaFile,
-		"meta-file", "/tmp/oldmeta", "The temp file to write metadata to",
-	)
-	flag.StringVar(&prjconfFile,
-		"prjconf-file", "/tmp/prjconf", "The temp file to write the project config to",
 	)
 	flag.BoolVar(&dryRun,
 		"dry-run", true, "Just do a dry run",

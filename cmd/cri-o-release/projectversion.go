@@ -9,6 +9,16 @@ import (
 	"sigs.k8s.io/release-utils/command"
 )
 
+const prjConf string = `
+Release: <CI_CNT>.<B_CNT>%%{?dist}
+%if "%_repository" == "CentOS_8" || "%_repository" == "CentOS_8_Stream"
+ExpandFlags: module:go-toolset-rhel8
+%endif
+%if "%_repository" == "CentOS_8_Stream"
+Prefer: centos-stream-release
+%endif
+`
+
 type projectVersion struct {
 	version    *semver.Version
 	oldProject string
@@ -59,12 +69,29 @@ func (p *projectVersion) Validate(projects []string) error {
 }
 
 func (p *projectVersion) CreateProject() error {
-	// TODO make pipe dry run
+	// TODO make last pipe dry run
+	// Update metadata for new project
 	cmd := command.New(oscCmd, "meta", "prj", p.oldProject).Pipe(
 		"sed", "--expression", "s/project name=.*>/project name=\""+p.newProject+"\">/g",
 	).Pipe(oscCmd, "meta", "prj", p.newProject, "-F", "-")
 
 	output, err := cmd.RunSilentSuccessOutput()
-	logrus.Infof("%s %v", output.OutputTrimNL(), err)
+	if err != nil {
+		return err
+	}
+	logrus.Debugf("osc meta prj output: %s", output.OutputTrimNL())
+
+	// TODO also make this dry run
+	// Update prjconf for new project
+	cmd = command.New("echo", prjConf).Pipe(
+		oscCmd, "meta", "prjconf", "-F", "-", p.newProject,
+	)
+
+	output, err = cmd.RunSilentSuccessOutput()
+	if err != nil {
+		return err
+	}
+	logrus.Debugf("osc meta prjconf output: %s", output.OutputTrimNL())
+
 	return nil
 }
