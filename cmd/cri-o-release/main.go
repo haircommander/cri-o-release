@@ -10,13 +10,13 @@ import (
 
 const (
 	packageName = "cri-o"
-	prefix      = "devel:kubic:libcontainers:stable:" + packageName
 	oscCmd      = "osc"
 )
 
 var (
 	targetVersionStr string
 	dryRun           bool
+	prefix           = "devel:kubic:libcontainers:stable:" + packageName
 )
 
 func main() {
@@ -48,7 +48,7 @@ func run() error {
 		return errors.Wrapf(err, "parse targetVersionStr")
 	}
 
-	if err := pv.CreateProject(); err != nil {
+	if err := pv.CreatePackage(); err != nil {
 		return err
 	}
 
