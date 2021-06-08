@@ -2,12 +2,18 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/blang/semver"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/release-utils/command"
+)
+
+const (
+	workdir string = "/tmp/cri-o-release-workdir"
 )
 
 const prjConf string = `
@@ -120,10 +126,40 @@ func (p *projectVersion) CreateProject() error {
 			oscCmd, "branch", p.oldProject, pkg, p.newProject,
 		).RunSilentSuccessOutput()
 		if err != nil {
+			logrus.Errorf("failed to branch: %v", err)
+		} else {
+			logrus.Debugf("osc branch output: %s", output.OutputTrimNL())
+		}
+	}
+
+	if err := os.MkdirAll(workdir, 0o755); err != nil {
+		return err
+	}
+
+	if err := os.Chdir(workdir); err != nil {
+		return err
+	}
+
+	// Only create if the project wasn't created
+	if _, staterr := os.Stat(filepath.Join(workdir, p.newProject)); staterr != nil {
+		if err = command.New(
+			oscCmd, "co", p.newProject, "-M",
+		).RunSilentSuccess(); err != nil {
 			return err
 		}
+	}
 
-		logrus.Debugf("osc branch output: %s", output.OutputTrimNL())
+	if err := os.Chdir(p.newProject); err != nil {
+		return err
+	}
+
+	// Only create if the package wasn't created
+	if _, staterr := os.Stat(filepath.Join(workdir, p.newProject, packageName)); staterr != nil {
+		if err = command.New(
+			oscCmd, "mkpac", packageName,
+		).RunSilentSuccess(); err != nil {
+			return err
+		}
 	}
 
 	return nil
