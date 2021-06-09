@@ -151,7 +151,7 @@ func (p *projectVersion) createProject() error {
 	}
 
 	// Only create if the project wasn't created
-	if _, staterr := os.Stat(filepath.Join(workdir, p.newProject)); staterr != nil {
+	if _, staterr := os.Stat(p.obsProjectDir()); staterr != nil {
 		if err = command.New(
 			oscCmd, "co", p.newProject, "-M",
 		).RunSilentSuccess(); err != nil {
@@ -164,7 +164,7 @@ func (p *projectVersion) createProject() error {
 	}
 
 	// Only create if the package wasn't created
-	if _, staterr := os.Stat(filepath.Join(workdir, p.newProject, packageName)); staterr != nil {
+	if _, staterr := os.Stat(p.obsPackageDir()); staterr != nil {
 		if err = command.New(
 			oscCmd, "mkpac", packageName,
 		).RunSilentSuccess(); err != nil {
@@ -173,6 +173,14 @@ func (p *projectVersion) createProject() error {
 	}
 
 	return nil
+}
+
+func (p *projectVersion) obsPackageDir() string {
+	return filepath.Join(p.obsProjectDir(), packageName)
+}
+
+func (p *projectVersion) obsProjectDir() string {
+	return filepath.Join(workdir, p.newProject)
 }
 
 func oscLs(target string, grepTarget string) ([]string, error) {

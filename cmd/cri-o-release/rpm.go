@@ -1,8 +1,10 @@
 package main
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -43,6 +45,7 @@ func (p *projectVersion) bumpRPM() error {
 	linesToReplace := map[string]string{
 		"%define built_tag ": "%define built_tag " + p.Version(),
 		"Version: ":          "Version: " + p.Version(),
+		"Release: ":          "Release: 0%{?dist}",
 		"%global commit0 ":   "%global commit0 " + rev,
 	}
 
@@ -56,8 +59,46 @@ func (p *projectVersion) bumpRPM() error {
 		return err
 	}
 
+	msg := "bump to " + p.Version()
+
 	if err = command.New(
-		bumpspecCmd, "-c", "bump to "+p.Version(), specFile,
+		bumpspecCmd, "-c", msg, specFile,
+	).RunSilentSuccess(); err != nil {
+		return err
+	}
+
+	// TODO FIXME git push
+	if err := CopyFile(specFile, filepath.Join(p.obsPackageDir(), specFile)); err != nil {
+		return err
+	}
+
+	// TODO FIXME git push
+	if err := CopyFile(p.RPMTarGz(), filepath.Join(p.obsPackageDir(), p.RPMTarGz())); err != nil {
+		return err
+	}
+
+	if dryRun {
+		return nil
+	}
+	if err := repo.Add(specFile); err != nil {
+		return err
+	}
+	if err := repo.Add(p.RPMTarGz()); err != nil {
+		return err
+	}
+	if err := repo.UserCommit(msg); err != nil {
+		return err
+	}
+	if err := os.Chdir(p.obsPackageDir()); err != nil {
+		return err
+	}
+	if err = command.New(
+		oscCmd, "add", specFile, p.RPMTarGz(),
+	).RunSilentSuccess(); err != nil {
+		return err
+	}
+	if err = command.New(
+		oscCmd, "commit", "-n",
 	).RunSilentSuccess(); err != nil {
 		return err
 	}
@@ -113,4 +154,30 @@ func (p *projectVersion) Version() string {
 
 func (p *projectVersion) RPMBranchName() string {
 	return strconv.FormatUint(p.version.Major, 10) + "." + strconv.FormatUint(p.version.Minor, 10)
+}
+
+func (p *projectVersion) RPMTarGz() string {
+	return p.Version() + ".tar.gz"
+}
+
+// Copy the src file to dst. Any existing file will be overwritten and will not
+// copy file attributes.
+func CopyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+	return out.Close()
 }

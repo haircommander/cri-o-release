@@ -28,7 +28,7 @@ func main() {
 		"target-version", "", "The version to be upgraded to",
 	)
 	flag.BoolVar(&dryRun,
-		"dry-run", true, "Just do a dry run",
+		"dry-run", false, "Just do a dry run",
 	)
 	flag.BoolVar(&validate,
 		"validate", false, "Validate the flags passed in",
