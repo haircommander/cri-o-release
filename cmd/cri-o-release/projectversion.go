@@ -56,10 +56,6 @@ func New(versionString string) (*projectVersion, error) {
 	}
 	pv.setProjectVersions()
 
-	if err := pv.validate(); err != nil {
-		return nil, err
-	}
-
 	return pv, nil
 }
 
@@ -94,9 +90,6 @@ func (p *projectVersion) validate() error {
 }
 
 func (p *projectVersion) CreatePackage() error {
-	if err := p.createProject(); err != nil {
-		return err
-	}
 	if err := p.bumpRPM(); err != nil {
 		return err
 	}

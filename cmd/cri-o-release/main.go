@@ -16,6 +16,9 @@ const (
 var (
 	targetVersionStr string
 	dryRun           bool
+	validate         bool
+	createProject    bool
+	doRPMBump        bool
 	prefix           = "devel:kubic:libcontainers:stable:" + packageName
 )
 
@@ -26,6 +29,15 @@ func main() {
 	)
 	flag.BoolVar(&dryRun,
 		"dry-run", true, "Just do a dry run",
+	)
+	flag.BoolVar(&validate,
+		"validate", false, "Validate the flags passed in",
+	)
+	flag.BoolVar(&createProject,
+		"create-project", false, "create the project in OBS",
+	)
+	flag.BoolVar(&doRPMBump,
+		"bump-rpm", false, "bump the version of the RPM",
 	)
 	flag.Parse()
 
@@ -48,8 +60,21 @@ func run() error {
 		return errors.Wrapf(err, "parse targetVersionStr")
 	}
 
-	if err := pv.CreatePackage(); err != nil {
-		return err
+	if validate {
+		if err := pv.validate(); err != nil {
+			return err
+		}
+	}
+	if createProject {
+		if err := pv.createProject(); err != nil {
+			return err
+		}
+	}
+
+	if doRPMBump {
+		if err := pv.bumpRPM(); err != nil {
+			return err
+		}
 	}
 
 	return nil
