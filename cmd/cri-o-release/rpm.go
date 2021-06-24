@@ -1,13 +1,13 @@
 package main
 
 import (
-	"io"
+	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/otiai10/copy"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	kgit "k8s.io/release/pkg/git"
@@ -25,6 +25,10 @@ var (
 )
 
 func (p *projectVersion) bumpRPM() error {
+	// TODO FIXME helper
+	p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor-1)
+	p.newProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
+
 	if err := os.Chdir(rpmSourceDir); err != nil {
 		return err
 	}
@@ -44,10 +48,9 @@ func (p *projectVersion) bumpRPM() error {
 	}
 
 	linesToReplace := map[string]string{
-		"%define built_tag ": "%define built_tag " + p.Version(),
-		"Version: ":          "Version: " + p.Version(),
-		"Release: ":          "Release: 0%{?dist}",
-		"%global commit0 ":   "%global commit0 " + rev,
+		"Version: ":        "Version:                " + p.version.String(),
+		"Release: ":        "Release:        0%{?dist}",
+		"%global commit0 ": "%global commit0 " + rev,
 	}
 
 	if err := replaceLinesInFile("cri-o.spec", linesToReplace); err != nil {
@@ -61,7 +64,6 @@ func (p *projectVersion) bumpRPM() error {
 	}
 
 	msg := "bump to " + p.Version()
-	obsFiles := append(sysconfigFiles, specFile, p.RPMTarGz())
 
 	if err = command.New(
 		bumpspecCmd, "-c", msg, specFile,
@@ -70,7 +72,7 @@ func (p *projectVersion) bumpRPM() error {
 	}
 
 	// TODO FIXME git push
-	if err := copyFiles(obsFiles, p.obsPackageDir()); err != nil {
+	if err := copy.Copy(".", p.obsPackageDir()); err != nil {
 		return err
 	}
 
@@ -147,36 +149,5 @@ func (p *projectVersion) RPMBranchName() string {
 }
 
 func (p *projectVersion) RPMTarGz() string {
-	return p.Version() + ".tar.gz"
-}
-
-func copyFiles(srcs []string, dst string) error {
-	for _, src := range srcs {
-		if err := copyFile(src, filepath.Join(dst, filepath.Base(src))); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// copy the src file to dst. Any existing file will be overwritten and will not
-// copy file attributes.
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
-	}
-	return out.Close()
+	return packageName + "-" + p.Version() + ".tar.gz"
 }
