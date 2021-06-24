@@ -59,7 +59,6 @@ func New(versionString string) (*projectVersion, error) {
 	pv := &projectVersion{
 		version: &v,
 	}
-	//pv.setProjectVersions()
 
 	return pv, nil
 }
