@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/blang/semver"
+	"github.com/otiai10/copy"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/release-utils/command"
@@ -31,6 +33,9 @@ ExpandFlags: module:go-toolset-rhel8
 %if "%_repository" == "CentOS_8_Stream"
 Prefer: centos-stream-release
 %endif
+%if 0%{?fedora_version}
+Prefer: golang-github-cpuguy83-go-md2man
+%endif
 `
 
 type projectVersion struct {
@@ -54,20 +59,9 @@ func New(versionString string) (*projectVersion, error) {
 	pv := &projectVersion{
 		version: &v,
 	}
-	pv.setProjectVersions()
+	//pv.setProjectVersions()
 
 	return pv, nil
-}
-
-func (p *projectVersion) setProjectVersions() {
-	if p.minorUpgrade() {
-		p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor-1)
-		p.newProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
-		return
-	}
-	p.oldProject = fmt.Sprintf("%s:%d.%d:%d.%d.%d", prefix, p.version.Major, p.version.Minor, p.version.Major, p.version.Minor, p.version.Patch-1)
-	p.newProject = fmt.Sprintf("%s:%d.%d:%d.%d.%d", prefix, p.version.Major, p.version.Minor, p.version.Major, p.version.Minor, p.version.Patch)
-	return
 }
 
 func (p *projectVersion) minorUpgrade() bool {
@@ -89,37 +83,85 @@ func (p *projectVersion) validate() error {
 	return errors.Errorf("project %s not found", p.oldProject)
 }
 
-func (p *projectVersion) CreatePackage() error {
-	if err := p.bumpRPM(); err != nil {
+func (p *projectVersion) createPackage() error {
+	p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor-1)
+	p.newProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
+
+	return p.createProject()
+}
+
+func (p *projectVersion) branchProject() error {
+	p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
+	p.newProject = fmt.Sprintf("%s:%d.%d:%d.%d.%d", prefix, p.version.Major, p.version.Minor, p.version.Major, p.version.Minor, p.version.Patch)
+
+	if err := p.createProject(); err != nil {
+		return err
+	}
+
+	if err := p.copyPackage(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *projectVersion) copyPackage() error {
+	if err := os.Chdir(workdir); err != nil {
+		return err
+	}
+	if err := oscCo(p.oldProject, false); err != nil {
+		return err
+	}
+	if err := oscCo(p.newProject, true); err != nil {
+		return err
+	}
+	logrus.Debugf("copying %s to %s", p.oldProject, p.newProject)
+	if err := copy.Copy(p.oldProject, p.newProject, copy.Options{
+		Skip: func(src string) (bool, error) {
+			return strings.HasSuffix(src, ".osc"), nil
+		},
+	}); err != nil {
+		return err
+	}
+	if err := os.Chdir(filepath.Join(p.newProject, packageName)); err != nil {
+		return err
+	}
+	if err := commitAllInWd(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func commitAllInWd() error {
+	files, err := ioutil.ReadDir(".")
+	if err != nil {
+		return err
+	}
+	fileNames := make([]string, 0, len(files))
+	for _, file := range files {
+		if file.Name() == ".osc" {
+			continue
+		}
+		fileNames = append(fileNames, file.Name())
+	}
+
+	if err := command.New(oscCmd, append([]string{"add"}, fileNames...)...).RunSilentSuccess(); err != nil {
+		return err
+	}
+	if err := command.New(oscCmd, "commit", "-n").RunSilentSuccess(); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (p *projectVersion) createProject() error {
-	// TODO make last pipe dry run
-	// Update metadata for new project
-	cmd := command.New(oscCmd, "meta", "prj", p.oldProject).Pipe(
-		"sed", "--expression", "s/project name=.*>/project name=\""+p.newProject+"\">/g",
-	).Pipe(oscCmd, "meta", "prj", p.newProject, "-F", "-")
-
-	output, err := cmd.RunSilentSuccessOutput()
-	if err != nil {
+	if err := p.copyProjectMeta(); err != nil {
 		return err
 	}
-	logrus.Debugf("osc meta prj output: %s", output.OutputTrimNL())
-
-	// TODO also make this dry run
-	// Update prjconf for new project
-	cmd = command.New("echo", prjConf).Pipe(
-		oscCmd, "meta", "prjconf", "-F", "-", p.newProject,
-	)
-
-	output, err = cmd.RunSilentSuccessOutput()
-	if err != nil {
+	if err := p.createPrjConf(); err != nil {
 		return err
 	}
-	logrus.Debugf("osc meta prjconf output: %s", output.OutputTrimNL())
 
 	pkgs, err := oscLs(p.oldProject, "")
 	if err != nil {
@@ -150,13 +192,8 @@ func (p *projectVersion) createProject() error {
 		return err
 	}
 
-	// Only create if the project wasn't created
-	if _, staterr := os.Stat(p.obsProjectDir()); staterr != nil {
-		if err = command.New(
-			oscCmd, "co", p.newProject, "-M",
-		).RunSilentSuccess(); err != nil {
-			return err
-		}
+	if err := oscCo(p.newProject, true); err != nil {
+		return err
 	}
 
 	if err := os.Chdir(p.newProject); err != nil {
@@ -172,6 +209,53 @@ func (p *projectVersion) createProject() error {
 		}
 	}
 
+	return nil
+}
+
+func oscCo(project string, meta bool) error {
+	if _, err := os.Stat(project); err == nil {
+		return nil
+	}
+	args := []string{"co", project}
+	if meta {
+		args = append(args, "-M")
+	}
+	cmd := command.New(oscCmd, args...)
+	output, err := cmd.RunSilentSuccessOutput()
+	if err != nil {
+		return err
+	}
+	logrus.Debugf("osc co", output.OutputTrimNL())
+	return nil
+}
+
+func (p *projectVersion) copyProjectMeta() error {
+	// TODO make last pipe dry run
+	// Update metadata for new project
+	cmd := command.New(oscCmd, "meta", "prj", p.oldProject).Pipe(
+		"sed", "--expression", "s/project name=.*>/project name=\""+p.newProject+"\">/g",
+	).Pipe(oscCmd, "meta", "prj", p.newProject, "-F", "-")
+
+	output, err := cmd.RunSilentSuccessOutput()
+	if err != nil {
+		return err
+	}
+	logrus.Debugf("osc meta prj output: %s", output.OutputTrimNL())
+	return nil
+}
+
+func (p *projectVersion) createPrjConf() error {
+	// TODO also make this dry run
+	// Update prjconf for new project
+	cmd := command.New("echo", prjConf).Pipe(
+		oscCmd, "meta", "prjconf", "-F", "-", p.newProject,
+	)
+
+	output, err := cmd.RunSilentSuccessOutput()
+	if err != nil {
+		return err
+	}
+	logrus.Debugf("osc meta prjconf output: %s", output.OutputTrimNL())
 	return nil
 }
 

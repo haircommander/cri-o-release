@@ -20,7 +20,8 @@ const (
 )
 
 var (
-	specFile string = packageName + ".spec"
+	specFile       string   = packageName + ".spec"
+	sysconfigFiles []string = []string{"crio-network.sysconfig", "crio-storage.sysconfig", "crio-metrics.sysconfig"}
 )
 
 func (p *projectVersion) bumpRPM() error {
@@ -60,6 +61,7 @@ func (p *projectVersion) bumpRPM() error {
 	}
 
 	msg := "bump to " + p.Version()
+	obsFiles := append(sysconfigFiles, specFile, p.RPMTarGz())
 
 	if err = command.New(
 		bumpspecCmd, "-c", msg, specFile,
@@ -68,12 +70,7 @@ func (p *projectVersion) bumpRPM() error {
 	}
 
 	// TODO FIXME git push
-	if err := CopyFile(specFile, filepath.Join(p.obsPackageDir(), specFile)); err != nil {
-		return err
-	}
-
-	// TODO FIXME git push
-	if err := CopyFile(p.RPMTarGz(), filepath.Join(p.obsPackageDir(), p.RPMTarGz())); err != nil {
+	if err := copyFiles(obsFiles, p.obsPackageDir()); err != nil {
 		return err
 	}
 
@@ -92,14 +89,7 @@ func (p *projectVersion) bumpRPM() error {
 	if err := os.Chdir(p.obsPackageDir()); err != nil {
 		return err
 	}
-	if err = command.New(
-		oscCmd, "add", specFile, p.RPMTarGz(),
-	).RunSilentSuccess(); err != nil {
-		return err
-	}
-	if err = command.New(
-		oscCmd, "commit", "-n",
-	).RunSilentSuccess(); err != nil {
+	if err := commitAllInWd(); err != nil {
 		return err
 	}
 
@@ -160,9 +150,18 @@ func (p *projectVersion) RPMTarGz() string {
 	return p.Version() + ".tar.gz"
 }
 
-// Copy the src file to dst. Any existing file will be overwritten and will not
+func copyFiles(srcs []string, dst string) error {
+	for _, src := range srcs {
+		if err := copyFile(src, filepath.Join(dst, filepath.Base(src))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// copy the src file to dst. Any existing file will be overwritten and will not
 // copy file attributes.
-func CopyFile(src, dst string) error {
+func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
