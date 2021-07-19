@@ -111,15 +111,23 @@ func (p *projectVersion) copyPackage() error {
 	if err := oscCo(p.oldProject, false); err != nil {
 		return err
 	}
-	if err := oscCo(p.newProject, true); err != nil {
+	if err := oscCo(p.newProject, false); err != nil {
 		return err
 	}
+
+	// make sure we're up to date
+	if err := os.Chdir(filepath.Join(p.newProject, packageName)); err != nil {
+		return err
+	}
+	if err := command.New(oscCmd, "update").RunSilentSuccess(); err != nil {
+		return err
+	}
+	if err := os.Chdir(workdir); err != nil {
+		return err
+	}
+
 	logrus.Debugf("copying %s to %s", p.oldProject, p.newProject)
-	if err := copy.Copy(p.oldProject, p.newProject, copy.Options{
-		Skip: func(src string) (bool, error) {
-			return strings.HasSuffix(src, ".osc"), nil
-		},
-	}); err != nil {
+	if err := p.copyRelevant(filepath.Join(p.oldProject, packageName), filepath.Join(p.newProject, packageName)); err != nil {
 		return err
 	}
 	if err := os.Chdir(filepath.Join(p.newProject, packageName)); err != nil {
@@ -276,4 +284,20 @@ func oscLs(target string, grepTarget string) ([]string, error) {
 		return nil, err
 	}
 	return strings.Split(output.OutputTrimNL(), "\n"), nil
+}
+
+func (p *projectVersion) copyRelevant(src, dest string) error {
+	return copy.Copy(src, dest, copy.Options{
+		Skip: func(src string) (bool, error) {
+			logrus.Debugf("checking %s", src)
+			skip := !strings.HasSuffix(src, "sysconfig") &&
+				!strings.HasSuffix(src, "cri-o.spec") &&
+				!strings.HasSuffix(src, p.RPMTarGz()) &&
+				!strings.HasSuffix(src, "sources")
+			if skip {
+				logrus.Debugf("skipping")
+			}
+			return skip, nil
+		},
+	})
 }

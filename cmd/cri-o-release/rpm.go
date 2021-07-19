@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/otiai10/copy"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	kgit "k8s.io/release/pkg/git"
@@ -71,8 +70,7 @@ func (p *projectVersion) bumpRPM() error {
 		return err
 	}
 
-	// TODO FIXME git push
-	if err := copy.Copy(".", p.obsPackageDir()); err != nil {
+	if err := p.copyRelevant(".", p.obsPackageDir()); err != nil {
 		return err
 	}
 
@@ -149,5 +147,5 @@ func (p *projectVersion) RPMBranchName() string {
 }
 
 func (p *projectVersion) RPMTarGz() string {
-	return packageName + "-" + p.Version() + ".tar.gz"
+	return packageName + "-" + p.version.String() + ".tar.gz"
 }

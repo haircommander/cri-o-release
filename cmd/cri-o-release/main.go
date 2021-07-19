@@ -66,18 +66,21 @@ func run() error {
 		}
 	}
 	if create {
-		//if p.minorUpgrade() {
-		//	if err := pv.createPackage(); err != nil {
-		//		return err
-		//	}
-		//}
-		if err := pv.branchProject(); err != nil {
-			return err
+		if pv.minorUpgrade() {
+			if err := pv.createPackage(); err != nil {
+				return err
+			}
 		}
 	}
 
 	if doRPMBump {
 		if err := pv.bumpRPM(); err != nil {
+			return err
+		}
+	}
+
+	if create {
+		if err := pv.branchProject(); err != nil {
 			return err
 		}
 	}
