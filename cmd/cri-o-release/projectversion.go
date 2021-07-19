@@ -150,6 +150,9 @@ func commitAllInWd() error {
 		if file.Name() == ".osc" {
 			continue
 		}
+		if file.Name() == "_meta" {
+			continue
+		}
 		fileNames = append(fileNames, file.Name())
 	}
 
