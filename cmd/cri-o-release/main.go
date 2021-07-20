@@ -19,6 +19,8 @@ var (
 	validate         bool
 	create           bool
 	doRPMBump        bool
+	doDebBump        bool
+	initialize       bool
 	prefix           = "devel:kubic:libcontainers:stable:" + packageName
 )
 
@@ -38,6 +40,12 @@ func main() {
 	)
 	flag.BoolVar(&doRPMBump,
 		"bump-rpm", false, "bump the version of the RPM",
+	)
+	flag.BoolVar(&doDebBump,
+		"bump-deb", false, "bump the version of the deb",
+	)
+	flag.BoolVar(&initialize,
+		"init", false, "init",
 	)
 	flag.Parse()
 
@@ -60,6 +68,12 @@ func run() error {
 		return errors.Wrapf(err, "parse targetVersionStr")
 	}
 
+	if initialize {
+		if err := pv.populateOscDirectories(); err != nil {
+			return err
+		}
+	}
+
 	if validate {
 		if err := pv.validate(); err != nil {
 			return err
@@ -75,6 +89,12 @@ func run() error {
 
 	if doRPMBump {
 		if err := pv.bumpRPM(); err != nil {
+			return err
+		}
+	}
+
+	if doDebBump {
+		if err := pv.bumpDeb(); err != nil {
 			return err
 		}
 	}

@@ -23,6 +23,7 @@ const (
 
 var (
 	upstreamRepoPath string = filepath.Join(workdir, "cri-o-upstream")
+	debianRepoPath   string = filepath.Join(workdir, "debian")
 )
 
 const prjConf string = `
@@ -294,6 +295,13 @@ func oscLs(target string, grepTarget string) ([]string, error) {
 }
 
 func (p *projectVersion) copyRelevant(src, dest string) error {
+	if err := p.copyRelevantRPM(src, dest); err != nil {
+		return err
+	}
+	return p.copyRelevantDeb(src, dest)
+}
+
+func (p *projectVersion) copyRelevantRPM(src, dest string) error {
 	return copy.Copy(src, dest, copy.Options{
 		Skip: func(src string) (bool, error) {
 			logrus.Debugf("checking %s", src)
@@ -306,4 +314,42 @@ func (p *projectVersion) copyRelevant(src, dest string) error {
 			return skip, nil
 		},
 	})
+}
+
+func (p *projectVersion) copyRelevantDeb(src, dest string) error {
+	return copy.Copy(src, dest, copy.Options{
+		Skip: func(src string) (bool, error) {
+			logrus.Debugf("checking %s", src)
+			skip := !strings.HasSuffix(src, fmt.Sprintf("cri-o_%s~0.dsc", p.version.String())) &&
+				!strings.HasSuffix(src, fmt.Sprintf("cri-o_%s~0.tar.gz", p.version.String()))
+			if skip {
+				logrus.Debugf("skipping")
+			}
+			return skip, nil
+		},
+	})
+}
+
+func (p *projectVersion) populateOscDirectories() error {
+	if err := os.Chdir(workdir); err != nil {
+		return err
+	}
+	p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor-1)
+	p.newProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
+	if err := oscCo(p.oldProject, false); err != nil {
+		return err
+	}
+	if err := oscCo(p.newProject, false); err != nil {
+		return err
+	}
+
+	p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
+	p.newProject = fmt.Sprintf("%s:%d.%d:%d.%d.%d", prefix, p.version.Major, p.version.Minor, p.version.Major, p.version.Minor, p.version.Patch)
+	if err := oscCo(p.oldProject, false); err != nil {
+		return err
+	}
+	if err := oscCo(p.newProject, false); err != nil {
+		return err
+	}
+	return nil
 }

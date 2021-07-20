@@ -70,7 +70,7 @@ func (p *projectVersion) bumpRPM() error {
 		return err
 	}
 
-	if err := p.copyRelevant(".", p.obsPackageDir()); err != nil {
+	if err := p.copyRelevantRPM(".", p.obsPackageDir()); err != nil {
 		return err
 	}
 
@@ -87,6 +87,9 @@ func (p *projectVersion) bumpRPM() error {
 		return err
 	}
 	if err := os.Chdir(p.obsPackageDir()); err != nil {
+		return err
+	}
+	if err := command.New(oscCmd, "update").RunSilentSuccess(); err != nil {
 		return err
 	}
 	if err := commitAllInWd(); err != nil {
