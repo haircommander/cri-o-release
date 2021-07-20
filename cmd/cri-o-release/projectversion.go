@@ -33,7 +33,7 @@ ExpandFlags: module:go-toolset-rhel8
 %if "%_repository" == "CentOS_8_Stream"
 Prefer: centos-stream-release
 %endif
-%if 0%{?fedora_version}
+%if 0%{?fedora_version} || 0%{?rhel_version}
 Prefer: golang-github-cpuguy83-go-md2man
 %endif
 `
@@ -295,8 +295,7 @@ func (p *projectVersion) copyRelevant(src, dest string) error {
 			logrus.Debugf("checking %s", src)
 			skip := !strings.HasSuffix(src, "sysconfig") &&
 				!strings.HasSuffix(src, "cri-o.spec") &&
-				!strings.HasSuffix(src, p.RPMTarGz()) &&
-				!strings.HasSuffix(src, "sources")
+				!strings.HasSuffix(src, p.RPMTarGz())
 			if skip {
 				logrus.Debugf("skipping")
 			}
