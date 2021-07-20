@@ -126,7 +126,7 @@ func replaceLinesInFile(file string, linesToReplace map[string]string) error {
 
 func (p *projectVersion) findReleaseGitCommit() (string, error) {
 	// Checkout the release branch
-	repo, err := kgit.CloneOrOpenGitHubRepo(upstreamRepoPath, packageName, packageName, false)
+	repo, err := cloneOrOpenUpstream()
 	if err != nil {
 		return "", errors.Wrap(err, "unable to open this repository")
 	}
@@ -136,6 +136,11 @@ func (p *projectVersion) findReleaseGitCommit() (string, error) {
 	}
 
 	return rev, nil
+}
+
+func cloneOrOpenUpstream() (*kgit.Repo, error) {
+	// Checkout the release branch
+	return kgit.CloneOrOpenGitHubRepo(upstreamRepoPath, packageName, packageName, false)
 }
 
 func (p *projectVersion) Version() string {

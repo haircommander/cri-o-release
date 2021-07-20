@@ -198,15 +198,7 @@ func (p *projectVersion) createProject() error {
 		return err
 	}
 
-	if err := os.Chdir(workdir); err != nil {
-		return err
-	}
-
-	if err := oscCo(p.newProject, true); err != nil {
-		return err
-	}
-
-	if err := os.Chdir(p.newProject); err != nil {
+	if err := p.enterNewProject(); err != nil {
 		return err
 	}
 
@@ -220,6 +212,18 @@ func (p *projectVersion) createProject() error {
 	}
 
 	return nil
+}
+
+func (p *projectVersion) enterNewProject() error {
+	if err := os.Chdir(workdir); err != nil {
+		return err
+	}
+
+	if err := oscCo(p.newProject, true); err != nil {
+		return err
+	}
+
+	return os.Chdir(p.newProject)
 }
 
 func oscCo(project string, meta bool) error {
