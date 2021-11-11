@@ -23,8 +23,9 @@ const (
 )
 
 var (
-	upstreamRepoPath string = filepath.Join(workdir, "cri-o-upstream", "cri-o")
-	debianRepoPath   string = filepath.Join(workdir, "debian")
+	upstreamRepoParent string = filepath.Join(workdir, "cri-o-upstream")
+	upstreamRepoPath   string = filepath.Join(upstreamRepoParent, "cri-o")
+	debianRepoPath     string = filepath.Join(workdir, "debian", "cri-o")
 )
 
 const prjConf string = `
@@ -304,7 +305,8 @@ func (p *projectVersion) copyRelevantRPM(src, dest string) error {
 			logrus.Debugf("checking %s", src)
 			skip := !strings.HasSuffix(src, "sysconfig") &&
 				!strings.HasSuffix(src, "cri-o.spec") &&
-				!strings.HasSuffix(src, p.RPMTarGz())
+				!strings.HasSuffix(src, p.RPMTarGz()) &&
+				!strings.HasSuffix(src, p.LegacyRPMTarGz())
 			if skip {
 				logrus.Debugf("skipping")
 			}

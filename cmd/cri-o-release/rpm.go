@@ -47,14 +47,20 @@ func (p *projectVersion) bumpRPM() error {
 	}
 
 	linesToReplace := map[string]string{
-		"Version: ":          "Version:                " + p.version.String(),
-		"Release: ":          "Release:        0%{?dist}",
-		"%global commit0 ":   "%global commit0 " + rev,
-		"%define built_tag ": "%define built_tag " + p.Version(),
+		"Version: ":        "Version:                " + p.version.String(),
+		"Release: ":        "Release:        0%{?dist}",
+		"%global commit0 ": "%global commit0 " + rev,
 	}
 
 	if err := replaceLinesInFile("cri-o.spec", linesToReplace); err != nil {
 		return err
+	}
+
+	linesToReplaceLegacy := map[string]string{
+		"%define built_tag ": "%define built_tag " + p.Version(),
+	}
+	if err := replaceLinesInFile("cri-o.spec", linesToReplaceLegacy); err != nil {
+		logrus.Debugf("failed to replace legacy line: %v", err)
 	}
 
 	if err = command.New(
