@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/blang/semver"
 	"github.com/otiai10/copy"
@@ -16,13 +17,13 @@ import (
 
 const (
 	// TODO FIXME hardcoded
-	workdir string = "/tmp/cri-o-release-workdir"
+	workdir string = "/home/pehunt/Packaging/obs/cri-o-release-workdir"
 	// TODO FIXME hardcoded
-	rpmSourceDir string = "/home/pehunt/Packaging/fedora-upstream/cri-o"
+	rpmSourceDir string = "/home/pehunt/Packaging/fedora/cri-o"
 )
 
 var (
-	upstreamRepoPath string = filepath.Join(workdir, "cri-o-upstream")
+	upstreamRepoPath string = filepath.Join(workdir, "cri-o-upstream", "cri-o")
 	debianRepoPath   string = filepath.Join(workdir, "debian")
 )
 
@@ -34,9 +35,7 @@ ExpandFlags: module:go-toolset-rhel8
 %if "%_repository" == "CentOS_8_Stream"
 Prefer: centos-stream-release
 %endif
-%if 0%{?fedora_version} || 0%{?rhel_version}
 Prefer: golang-github-cpuguy83-go-md2man
-%endif
 `
 
 type projectVersion struct {
@@ -106,7 +105,7 @@ func (p *projectVersion) branchProject() error {
 }
 
 func (p *projectVersion) copyPackage() error {
-	if err := os.Chdir(workdir); err != nil {
+	if err := enterWorkdir(); err != nil {
 		return err
 	}
 	if err := oscCo(p.oldProject, false); err != nil {
@@ -120,9 +119,7 @@ func (p *projectVersion) copyPackage() error {
 	if err := os.Chdir(filepath.Join(p.newProject, packageName)); err != nil {
 		return err
 	}
-	if err := command.New(oscCmd, "update").RunSilentSuccess(); err != nil {
-		return err
-	}
+	command.New(oscCmd, "update").RunSilentSuccess()
 	if err := os.Chdir(workdir); err != nil {
 		return err
 	}
@@ -216,7 +213,7 @@ func (p *projectVersion) createProject() error {
 }
 
 func (p *projectVersion) enterNewProject() error {
-	if err := os.Chdir(workdir); err != nil {
+	if err := enterWorkdir(); err != nil {
 		return err
 	}
 
@@ -331,25 +328,35 @@ func (p *projectVersion) copyRelevantDeb(src, dest string) error {
 }
 
 func (p *projectVersion) populateOscDirectories() error {
-	if err := os.Chdir(workdir); err != nil {
+	if err := enterWorkdir(); err != nil {
 		return err
 	}
-	p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor-1)
-	p.newProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
-	if err := oscCo(p.oldProject, false); err != nil {
-		return err
-	}
-	if err := oscCo(p.newProject, false); err != nil {
-		return err
+	if p.minorUpgrade() {
+		p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor-1)
+		p.newProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
+		if err := oscCo(p.oldProject, false); err != nil {
+			return err
+		}
+		if err := oscCo(p.newProject, false); err != nil {
+			return err
+		}
 	}
 
 	p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
-	p.newProject = fmt.Sprintf("%s:%d.%d:%d.%d.%d", prefix, p.version.Major, p.version.Minor, p.version.Major, p.version.Minor, p.version.Patch)
 	if err := oscCo(p.oldProject, false); err != nil {
 		return err
 	}
-	if err := oscCo(p.newProject, false); err != nil {
-		return err
+	return nil
+}
+
+func enterWorkdir() error {
+	if err := os.Chdir(workdir); err != nil {
+		if !errors.Is(err, syscall.ENOENT) {
+			return err
+		}
+		if err := os.MkdirAll(workdir, 0o755); err != nil {
+			return err
+		}
 	}
 	return nil
 }

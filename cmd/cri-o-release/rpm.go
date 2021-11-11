@@ -47,9 +47,10 @@ func (p *projectVersion) bumpRPM() error {
 	}
 
 	linesToReplace := map[string]string{
-		"Version: ":        "Version:                " + p.version.String(),
-		"Release: ":        "Release:        0%{?dist}",
-		"%global commit0 ": "%global commit0 " + rev,
+		"Version: ":          "Version:                " + p.version.String(),
+		"Release: ":          "Release:        0%{?dist}",
+		"%global commit0 ":   "%global commit0 " + rev,
+		"%define built_tag ": "%define built_tag " + p.Version(),
 	}
 
 	if err := replaceLinesInFile("cri-o.spec", linesToReplace); err != nil {
@@ -80,8 +81,11 @@ func (p *projectVersion) bumpRPM() error {
 	if err := repo.Add(specFile); err != nil {
 		return err
 	}
-	if err := repo.Add(p.RPMTarGz()); err != nil {
-		return err
+
+	if err := command.New("fedpkg", "new-sources", p.RPMTarGz()).RunSilentSuccess(); err != nil {
+		if err2 := command.New("fedpkg", "new-sources", p.LegacyRPMTarGz()).RunSilentSuccess(); err2 != nil {
+			return err2
+		}
 	}
 	if err := repo.UserCommit(msg); err != nil {
 		return err
@@ -156,4 +160,8 @@ func (p *projectVersion) RPMBranchName() string {
 
 func (p *projectVersion) RPMTarGz() string {
 	return packageName + "-" + p.version.String() + ".tar.gz"
+}
+
+func (p *projectVersion) LegacyRPMTarGz() string {
+	return p.Version() + ".tar.gz"
 }
