@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
 	kgit "k8s.io/release/pkg/git"
 	"sigs.k8s.io/release-utils/command"
 )
@@ -43,10 +44,28 @@ func (p *projectVersion) bumpDeb() error {
 	if err := replaceLinesInFile(fileInDebianRepo("rules"), linesToReplace); err != nil {
 		return err
 	}
+	if !dryRun {
+		if err := debian.Add(fileInDebianRepo("rules")); err != nil {
+			return err
+		}
+		if err := debian.Add(fileInDebianRepo("changelog")); err != nil {
+			return err
+		}
+		msg := "bump to " + p.Version()
+
+		if err := debian.UserCommit(msg); err != nil {
+			return err
+		}
+	}
 
 	if err := os.Rename(fileInDebianRepo(""), filepath.Join(upstreamRepoPath, "debian")); err != nil {
 		return err
 	}
+	defer func() {
+		if err := os.Rename(filepath.Join(upstreamRepoPath, "debian"), fileInDebianRepo("")); err != nil {
+			logrus.Infof("failed to return debian path: %v", err)
+		}
+	}()
 
 	// TODO FIXME commit debian
 
@@ -63,24 +82,10 @@ func (p *projectVersion) bumpDeb() error {
 		return err
 	}
 
-	if err := p.copyRelevantDeb(upstreamRepoPath, p.obsPackageDir()); err != nil {
+	if err := p.copyRelevantDeb(upstreamRepoParent, p.obsPackageDir()); err != nil {
 		return err
 	}
 
-	//	if dryRun {
-	//		return nil
-	//	}
-	//	if err := debian.Add(fileInDebianRepo("rules")); err != nil {
-	//		return err
-	//	}
-	//	if err := debian.Add(fileInDebianRepo("changelog")); err != nil {
-	//		return err
-	//	}
-	//	msg := "bump to " + p.Version()
-	//
-	//	if err := debian.UserCommit(msg); err != nil {
-	//		return err
-	//	}
 	if err := os.Chdir(p.obsPackageDir()); err != nil {
 		return err
 	}
