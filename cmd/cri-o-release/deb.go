@@ -32,6 +32,7 @@ func (p *projectVersion) bumpDeb() error {
 	if err := upstream.Checkout(p.Version()); err != nil {
 		return err
 	}
+	defer upstream.Checkout("main")
 
 	if err := p.bumpDebianChangelog(); err != nil {
 		return err

@@ -143,6 +143,7 @@ func (p *projectVersion) findReleaseGitCommit() (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "unable to open this repository")
 	}
+	defer repo.Checkout("main")
 	rev, err := repo.RevParse(p.Version())
 	if err != nil {
 		return "", errors.Wrap(err, "unable to list tags")
