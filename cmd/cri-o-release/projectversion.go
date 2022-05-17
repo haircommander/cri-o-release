@@ -337,16 +337,16 @@ func (p *projectVersion) populateOscDirectories() error {
 		p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor-1)
 		p.newProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
 		if err := oscCo(p.oldProject, false); err != nil {
-			return err
+			logrus.Errorf("Failed to copy directory %s, may need to create it", p.oldProject)
 		}
 		if err := oscCo(p.newProject, false); err != nil {
-			return err
+			logrus.Errorf("Failed to copy directory %s, may need to create it", p.newProject)
 		}
 	}
 
 	p.oldProject = fmt.Sprintf("%s:%d.%d", prefix, p.version.Major, p.version.Minor)
 	if err := oscCo(p.oldProject, false); err != nil {
-		return err
+		logrus.Errorf("Failed to copy directory %s, may need to create it", p.newProject)
 	}
 	return nil
 }

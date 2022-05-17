@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -105,42 +106,37 @@ func (p *projectVersion) DebianBranchName() string {
 	return fmt.Sprintf("debian-%d.%d", p.version.Major, p.version.Minor)
 }
 
-const debianChangelogPrepend = `cri-o (%s~0) stable; urgency=medium
-
-  * bump to %s
-
-`
+const debianChangelogMessage = `bump to %s`
 
 func (p *projectVersion) bumpDebianChangelog() error {
-	tmpCl, err := ioutil.TempFile(workdir, "changelog")
-	if err != nil {
+	if err := os.Chdir(debianRepoPath); err != nil {
 		return err
 	}
-	defer tmpCl.Close()
-
-	if _, err := tmpCl.Write([]byte(fmt.Sprintf(debianChangelogPrepend, p.version.String(), p.Version()))); err != nil {
+	if err := command.New(
+		"dch", "--newversion", p.version.String()+"~0", "-M", "-m", fmt.Sprintf(debianChangelogMessage, p.Version()),
+	).RunSilentSuccess(); err != nil {
 		return err
 	}
-
-	oldCl, err := os.Open(fileInDebianRepo("changelog"))
-	if err != nil {
-		return err
-	}
-
-	oldContents, err := ioutil.ReadAll(oldCl)
-	if err != nil {
-		return err
-	}
-
-	if _, err := tmpCl.Write(oldContents); err != nil {
-		return err
-	}
-
-	tmpCl.Sync()
-
-	return os.Rename(tmpCl.Name(), oldCl.Name())
+	return replaceStringInFile(fileInDebianRepo("changelog"), map[string]string{
+		"UNRELEASED": "stable",
+	})
 }
 
 func fileInDebianRepo(file string) string {
 	return filepath.Join(debianRepoPath, "debian", file)
+}
+
+func replaceStringInFile(file string, stringsToReplace map[string]string) error {
+	input, err := ioutil.ReadFile(file)
+	if err != nil {
+		return err
+	}
+
+	var output []byte
+	for from, to := range stringsToReplace {
+		output = bytes.Replace(input, []byte(from), []byte(to), -1)
+		input = output
+	}
+
+	return ioutil.WriteFile(file, output, 0666)
 }

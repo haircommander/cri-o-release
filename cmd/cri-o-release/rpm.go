@@ -37,6 +37,7 @@ func (p *projectVersion) bumpRPM() error {
 		return errors.Wrap(err, "unable to open this repository")
 	}
 
+	// Manual step: if minor version upgrade, rpm branch doesn't exist yet
 	if err := repo.Checkout(p.RPMBranchName()); err != nil {
 		return errors.Wrapf(err, "unable to checkout version %s", p.RPMBranchName())
 	}
@@ -52,6 +53,8 @@ func (p *projectVersion) bumpRPM() error {
 		"%global commit0 ": "%global commit0 " + rev,
 	}
 
+	// Manual step: if minor version upgrade, cri-o.spec doesn't exist
+	// can be found with `git checkout origin/$oldversion cri-o.spec
 	if err := replaceLinesInFile("cri-o.spec", linesToReplace); err != nil {
 		return err
 	}
@@ -100,7 +103,7 @@ func (p *projectVersion) bumpRPM() error {
 		return err
 	}
 	if err := command.New(oscCmd, "update").RunSilentSuccess(); err != nil {
-		return err
+		logrus.Errorf("failed to update, package may not exist yet %v", err)
 	}
 	if err := commitAllInWd(); err != nil {
 		return err

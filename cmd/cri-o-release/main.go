@@ -16,36 +16,24 @@ const (
 var (
 	targetVersionStr string
 	dryRun           bool
-	validate         bool
-	create           bool
 	doRPMBump        bool
 	doDebBump        bool
-	initialize       bool
 	prefix           = "devel:kubic:libcontainers:stable:" + packageName
 )
 
 func main() {
 	// Parse CLI flags.
 	flag.StringVar(&targetVersionStr,
-		"target-version", "", "The version to be upgraded to",
+		"version", "", "The version to be upgraded to",
 	)
 	flag.BoolVar(&dryRun,
 		"dry-run", false, "Just do a dry run",
 	)
-	flag.BoolVar(&validate,
-		"validate", false, "Validate the flags passed in",
-	)
-	flag.BoolVar(&create,
-		"create", false, "create the project in OBS",
-	)
 	flag.BoolVar(&doRPMBump,
-		"bump-rpm", false, "bump the version of the RPM",
+		"rpm", false, "bump the version of the RPM",
 	)
 	flag.BoolVar(&doDebBump,
-		"bump-deb", false, "bump the version of the deb",
-	)
-	flag.BoolVar(&initialize,
-		"init", false, "init",
+		"deb", false, "bump the version of the deb",
 	)
 	flag.Parse()
 
@@ -67,24 +55,17 @@ func run() error {
 	if err != nil {
 		return errors.Wrapf(err, "parse targetVersionStr")
 	}
-
-	if initialize {
-		if err := pv.populateOscDirectories(); err != nil {
+	if pv.minorUpgrade() {
+		if err := pv.createPackage(); err != nil {
 			return err
 		}
-	}
-
-	if validate {
 		if err := pv.validate(); err != nil {
 			return err
 		}
 	}
-	if create {
-		if pv.minorUpgrade() {
-			if err := pv.createPackage(); err != nil {
-				return err
-			}
-		}
+
+	if err := pv.populateOscDirectories(); err != nil {
+		return err
 	}
 
 	if doRPMBump {
@@ -99,10 +80,8 @@ func run() error {
 		}
 	}
 
-	if create {
-		if err := pv.branchProject(); err != nil {
-			return err
-		}
+	if err := pv.branchProject(); err != nil {
+		return err
 	}
 
 	return nil
